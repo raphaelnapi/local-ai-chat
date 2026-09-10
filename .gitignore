@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+
+# Backups locais podem conter conversas e credenciais.
+backups/
+*.dump
+*.sql
+*.tar.gz
+
+# Arquivos locais de sistema e editores.
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

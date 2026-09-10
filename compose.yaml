@@ -1,0 +1,82 @@
+name: local-ai-chat
+
+services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-17.11-alpine}
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Defina POSTGRES_DB no arquivo .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Defina POSTGRES_USER no arquivo .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}
+      TZ: ${TZ:-America/Sao_Paulo}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - local_ai
+
+  ollama:
+    image: ollama/ollama:${OLLAMA_VERSION:-0.33.3}
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Sao_Paulo}
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks:
+      - local_ai
+
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:${OPEN_WEBUI_VERSION:-v0.11.3}
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Defina POSTGRES_USER no arquivo .env}:${POSTGRES_PASSWORD:?Defina POSTGRES_PASSWORD no arquivo .env}@postgres:5432/${POSTGRES_DB:?Defina POSTGRES_DB no arquivo .env}
+      OLLAMA_BASE_URL: http://ollama:11434
+      ENABLE_OLLAMA_API: "True"
+      ENABLE_OPENAI_API: "False"
+      WEBUI_AUTH: "True"
+      WEBUI_SECRET_KEY: ${WEBUI_SECRET_KEY:?Defina WEBUI_SECRET_KEY no arquivo .env}
+      WEBUI_URL: ${WEBUI_URL:-http://localhost:3000}
+      TZ: ${TZ:-America/Sao_Paulo}
+    ports:
+      - "${OPEN_WEBUI_PORT:-3000}:8080"
+    volumes:
+      - open_webui_data:/app/backend/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - import urllib.request; urllib.request.urlopen('http://localhost:8080/health', timeout=5)
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks:
+      - local_ai
+
+networks:
+  local_ai:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  ollama_data:
+  open_webui_data:
